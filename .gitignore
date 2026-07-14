@@ -1,0 +1,23 @@
+# Kiro
+.kiro/
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# IDE
+.vs/
+.vscode/
+*.swp
+
+# Keys (never commit private keys)
+private.pem
+public.pem
+
+# OS
+Thumbs.db
+.DS_Store
