@@ -46,6 +46,24 @@ public interface ICartRedisWrapper
     /// Removes product tracking for a user's cart (called when product is removed or cart is cleared).
     /// </summary>
     Task UntrackProductsInCartAsync(Guid userId, IEnumerable<Guid> productIds);
+
+    /// <summary>
+    /// Gets the cached guest cart JSON for a given guest session token.
+    /// Returns null when Redis is unavailable or key doesn't exist.
+    /// </summary>
+    Task<string?> GetGuestCartAsync(Guid guestSessionToken);
+
+    /// <summary>
+    /// Stores guest cart JSON with the specified TTL.
+    /// Logs a warning and continues when Redis is unavailable.
+    /// </summary>
+    Task SetGuestCartAsync(Guid guestSessionToken, string json, TimeSpan ttl);
+
+    /// <summary>
+    /// Deletes the cached guest cart for a given session token.
+    /// Logs a warning and continues when Redis is unavailable.
+    /// </summary>
+    Task DeleteGuestCartAsync(Guid guestSessionToken);
 }
 
 /// <summary>
@@ -326,6 +344,126 @@ public class CartRedisWrapper : ICartRedisWrapper
             _logger.LogWarning(ex,
                 "Redis timeout when untracking products for user {UserId}.",
                 userId);
+        }
+    }
+
+    private const string GuestCartKeyPrefix = "guest_cart:";
+
+    /// <inheritdoc />
+    public async Task<string?> GetGuestCartAsync(Guid guestSessionToken)
+    {
+        try
+        {
+            var result = await _resiliencePipeline.ExecuteAsync(async ct =>
+            {
+                var db = _redis.GetDatabase();
+                var value = await db.StringGetAsync($"{GuestCartKeyPrefix}{guestSessionToken}");
+                return value.HasValue ? value.ToString() : null;
+            });
+
+            return result;
+        }
+        catch (BrokenCircuitException)
+        {
+            _logger.LogWarning(
+                "Redis circuit breaker is open when getting guest cart for session {Token}. Falling back to PostgreSQL.",
+                guestSessionToken);
+            return null;
+        }
+        catch (TimeoutRejectedException)
+        {
+            _logger.LogWarning(
+                "Redis call timed out when getting guest cart for session {Token}. Falling back to PostgreSQL.",
+                guestSessionToken);
+            return null;
+        }
+        catch (RedisConnectionException ex)
+        {
+            _logger.LogWarning(ex,
+                "Redis unavailable when getting guest cart for session {Token}. Falling back to PostgreSQL.",
+                guestSessionToken);
+            return null;
+        }
+        catch (RedisTimeoutException ex)
+        {
+            _logger.LogWarning(ex,
+                "Redis timeout when getting guest cart for session {Token}. Falling back to PostgreSQL.",
+                guestSessionToken);
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task SetGuestCartAsync(Guid guestSessionToken, string json, TimeSpan ttl)
+    {
+        try
+        {
+            await _resiliencePipeline.ExecuteAsync(async ct =>
+            {
+                var db = _redis.GetDatabase();
+                await db.StringSetAsync($"{GuestCartKeyPrefix}{guestSessionToken}", json, ttl);
+            });
+        }
+        catch (BrokenCircuitException)
+        {
+            _logger.LogWarning(
+                "Redis circuit breaker is open when setting guest cart for session {Token}. Cache will not be updated.",
+                guestSessionToken);
+        }
+        catch (TimeoutRejectedException)
+        {
+            _logger.LogWarning(
+                "Redis call timed out when setting guest cart for session {Token}. Cache will not be updated.",
+                guestSessionToken);
+        }
+        catch (RedisConnectionException ex)
+        {
+            _logger.LogWarning(ex,
+                "Redis unavailable when setting guest cart for session {Token}. Cache will not be updated.",
+                guestSessionToken);
+        }
+        catch (RedisTimeoutException ex)
+        {
+            _logger.LogWarning(ex,
+                "Redis timeout when setting guest cart for session {Token}. Cache will not be updated.",
+                guestSessionToken);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteGuestCartAsync(Guid guestSessionToken)
+    {
+        try
+        {
+            await _resiliencePipeline.ExecuteAsync(async ct =>
+            {
+                var db = _redis.GetDatabase();
+                await db.KeyDeleteAsync($"{GuestCartKeyPrefix}{guestSessionToken}");
+            });
+        }
+        catch (BrokenCircuitException)
+        {
+            _logger.LogWarning(
+                "Redis circuit breaker is open when deleting guest cart for session {Token}. Cache entry may be stale.",
+                guestSessionToken);
+        }
+        catch (TimeoutRejectedException)
+        {
+            _logger.LogWarning(
+                "Redis call timed out when deleting guest cart for session {Token}. Cache entry may be stale.",
+                guestSessionToken);
+        }
+        catch (RedisConnectionException ex)
+        {
+            _logger.LogWarning(ex,
+                "Redis unavailable when deleting guest cart for session {Token}. Cache entry may be stale.",
+                guestSessionToken);
+        }
+        catch (RedisTimeoutException ex)
+        {
+            _logger.LogWarning(ex,
+                "Redis timeout when deleting guest cart for session {Token}. Cache entry may be stale.",
+                guestSessionToken);
         }
     }
 

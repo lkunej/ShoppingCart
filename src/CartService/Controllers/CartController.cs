@@ -1,3 +1,4 @@
+using CartService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Middleware;
@@ -13,11 +14,13 @@ namespace CartService.Controllers;
 public class CartController : ControllerBase
 {
     private readonly ICartService _cartService;
+    private readonly ICartMergeService _cartMergeService;
     private readonly ILogger<CartController> _logger;
 
-    public CartController(ICartService cartService, ILogger<CartController> logger)
+    public CartController(ICartService cartService, ICartMergeService cartMergeService, ILogger<CartController> logger)
     {
         _cartService = cartService;
+        _cartMergeService = cartMergeService;
         _logger = logger;
     }
 
@@ -99,9 +102,9 @@ public class CartController : ControllerBase
             return Unauthorized(new ErrorResponse("Unauthorized", "Missing or invalid X-User-Id header."));
         }
 
-        if (request.Quantity < 1 || request.Quantity > 999)
+        if (request.Quantity < 1 || request.Quantity > 9999)
         {
-            return BadRequest(new ErrorResponse("ValidationError", "Quantity must be between 1 and 999."));
+            return BadRequest(new ErrorResponse("ValidationError", "Quantity must be between 1 and 9999."));
         }
 
         try
@@ -154,6 +157,40 @@ public class CartController : ControllerBase
         {
             _logger.LogWarning(ex, "Service unavailable while removing item for user {UserId}.", userId);
             return StatusCode(503, new ErrorResponse("ServiceUnavailable", ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// POST /api/cart/merge — Merge guest cart into the authenticated user's cart.
+    /// </summary>
+    [HttpPost("merge")]
+    public async Task<IActionResult> MergeCart()
+    {
+        if (!TryGetUserId(out var userId))
+        {
+            return Unauthorized(new ErrorResponse("Unauthorized", "Missing or invalid X-User-Id header."));
+        }
+
+        if (!Request.Headers.TryGetValue("X-Guest-Session", out var guestSessionHeader))
+        {
+            return BadRequest(new ErrorResponse("InvalidGuestSession", "Missing X-Guest-Session header."));
+        }
+
+        var guestSessionValue = guestSessionHeader.ToString();
+        if (string.IsNullOrWhiteSpace(guestSessionValue) || !Guid.TryParse(guestSessionValue, out var guestSessionToken))
+        {
+            return BadRequest(new ErrorResponse("InvalidGuestSession", "X-Guest-Session header must be a valid UUID."));
+        }
+
+        try
+        {
+            var mergeResult = await _cartMergeService.MergeGuestCart(userId, guestSessionToken);
+            return Ok(mergeResult.Response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error merging guest cart for user {UserId} with session {GuestSessionToken}.", userId, guestSessionToken);
+            return StatusCode(500, new ErrorResponse("InternalError", "An unexpected error occurred during cart merge."));
         }
     }
 

@@ -102,7 +102,15 @@ public class AuthController : ControllerBase
 
         _logger.LogInformation("User {UserId} authenticated successfully.", user.Id);
 
-        return Ok(new LoginResponse(tokenPair.AccessToken, tokenPair.RefreshToken, tokenPair.ExpiresIn));
+        // Read guest session token if present (passed through for client-side cart merge)
+        string? guestSessionToken = null;
+        var guestSessionHeader = Request.Headers["X-Guest-Session"].FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(guestSessionHeader) && Guid.TryParse(guestSessionHeader, out _))
+        {
+            guestSessionToken = guestSessionHeader;
+        }
+
+        return Ok(new LoginResponse(tokenPair.AccessToken, tokenPair.RefreshToken, tokenPair.ExpiresIn, guestSessionToken));
     }
 
     /// <summary>
@@ -269,4 +277,4 @@ public class AuthController : ControllerBase
 public record LoginRequest(string Email, string Password);
 public record RefreshRequest(string RefreshToken);
 public record RegisterRequest(string Email, string Password, string Role = "Customer");
-public record LoginResponse(string AccessToken, string RefreshToken, int ExpiresIn);
+public record LoginResponse(string AccessToken, string RefreshToken, int ExpiresIn, string? GuestSessionTokenPassthrough = null);
