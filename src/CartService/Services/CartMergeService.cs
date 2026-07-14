@@ -54,7 +54,6 @@ public class CartMergeService : ICartMergeService
         {
             authCart = new Cart
             {
-                Id = Guid.NewGuid(),
                 UserId = userId,
                 GuestSessionToken = null,
                 CreatedAt = DateTime.UtcNow,
@@ -108,7 +107,6 @@ public class CartMergeService : ICartMergeService
                 // Guest-only item: add to auth cart
                 var newItem = new CartItem
                 {
-                    Id = Guid.NewGuid(),
                     CartId = authCart.Id,
                     ProductId = guestItem.ProductId,
                     ProductName = guestItem.ProductName,
