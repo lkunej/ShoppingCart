@@ -63,6 +63,8 @@ builder.Services.AddSwaggerGen(options =>
             Array.Empty<string>()
         }
     });
+
+    options.OperationFilter<CartService.Infrastructure.GuestSessionHeaderOperationFilter>();
 });
 
 // ───────────────────────────────────────────────────────
@@ -180,8 +182,11 @@ builder.Services.AddAuthorization();
 // Scoped services (depend on CartDbContext which is scoped)
 builder.Services.AddScoped<ICartService, CartService.Services.CartService>();
 builder.Services.AddScoped<IInventoryClient, InventoryClient>();
+builder.Services.AddScoped<IGuestCartService, GuestCartService>();
+builder.Services.AddScoped<ICartMergeService, CartMergeService>();
 
 // Singleton services (stateless or manage their own state)
+builder.Services.AddSingleton<IGuestRateLimiterService, GuestRateLimiterService>();
 builder.Services.AddSingleton<IPriceCalculator, PriceCalculator>();
 builder.Services.AddSingleton<ICartSerializer, CartSerializer>();
 builder.Services.AddSingleton<ICartRedisWrapper, CartRedisWrapper>();
@@ -191,6 +196,7 @@ builder.Services.AddSingleton<IRBACService, RBACService>();
 
 // Background services
 builder.Services.AddHostedService<InventoryEventConsumer>();
+builder.Services.AddHostedService<GuestCartCleanupService>();
 
 // ───────────────────────────────────────────────────────
 // 3rd-Party Service Integrations
