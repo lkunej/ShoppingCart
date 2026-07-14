@@ -205,6 +205,15 @@ builder.Services.AddSingleton<IEventPublisher, EventPublisher>();
 var app = builder.Build();
 
 // ───────────────────────────────────────────────────────
+// Auto-migrate database on startup
+// ───────────────────────────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+    await db.Database.MigrateAsync();
+}
+
+// ───────────────────────────────────────────────────────
 // Middleware Pipeline
 // ───────────────────────────────────────────────────────
 

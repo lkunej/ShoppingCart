@@ -223,6 +223,15 @@ builder.Services.AddHttpClient<IFiscalClient, FiscalClient>(client =>
 var app = builder.Build();
 
 // ───────────────────────────────────────────────────────
+// Auto-migrate database on startup (Development only)
+// ───────────────────────────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<CartDbContext>();
+    await db.Database.MigrateAsync();
+}
+
+// ───────────────────────────────────────────────────────
 // Middleware Pipeline
 // ───────────────────────────────────────────────────────
 
