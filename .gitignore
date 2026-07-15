@@ -21,3 +21,10 @@ public.pem
 # OS
 Thumbs.db
 .DS_Store
+
+# Local kubernetees deployment
+k8s-local-deployment
+
+# Certs and keys
+*.crt
+*.key

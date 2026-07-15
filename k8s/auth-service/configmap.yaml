@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-config
+  labels:
+    app: auth-service
+data:
+  Redis__ConnectionString: "redis-service:6379"
+  RabbitMQ__Host: "rabbitmq-service"
+  RabbitMQ__Port: "5672"
