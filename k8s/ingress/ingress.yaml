@@ -1,0 +1,152 @@
+# NGINX Ingress configuration for API Gateway
+# Provides TLS 1.3 termination, path-based routing, rate limiting,
+# token validation via auth subrequest, and header forwarding.
+# Split into two Ingress resources:
+#   1. auth-ingress: public auth routes (no token validation)
+#   2. api-ingress: protected API routes (token validation required)
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: auth-ingress
+  annotations:
+    # TLS 1.3 only
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.3"
+    # Global rate limit: 1000 requests per second per client IP
+    nginx.ingress.kubernetes.io/limit-rps: "1000"
+    # Use client real IP for rate limiting
+    nginx.ingress.kubernetes.io/enable-real-ip: "true"
+    # Enable regex path matching
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Custom headers - forward correlation ID from client if present
+    nginx.ingress.kubernetes.io/proxy-set-headers: "default/custom-headers"
+    # Custom 404 for unmatched routes
+    nginx.ingress.kubernetes.io/default-backend: "default-backend"
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: tls-secret
+  rules:
+    - http:
+        paths:
+          # Auth routes - no token validation required (handles login, refresh, logout, validate)
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-service
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ingress
+  annotations:
+    # TLS 1.3 only
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.3"
+    # Global rate limit: 1000 requests per second per client IP
+    nginx.ingress.kubernetes.io/limit-rps: "1000"
+    # Use client real IP for rate limiting
+    nginx.ingress.kubernetes.io/enable-real-ip: "true"
+    # Enable regex path matching
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Token validation via auth subrequest to Auth Service
+    nginx.ingress.kubernetes.io/auth-url: "http://auth-service.default.svc.cluster.local/auth/validate"
+    nginx.ingress.kubernetes.io/auth-method: "GET"
+    # Forward validated user context headers from auth response to upstream
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-User-Id, X-User-Role, X-Correlation-Id"
+    # Custom headers
+    nginx.ingress.kubernetes.io/proxy-set-headers: "default/custom-headers"
+    # Custom 404 for unmatched routes
+    nginx.ingress.kubernetes.io/default-backend: "default-backend"
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: tls-secret
+  rules:
+    - http:
+        paths:
+          # Cart CRUD - authenticated access
+          - path: /api/cart
+            pathType: Prefix
+            backend:
+              service:
+                name: cart-service
+                port:
+                  number: 80
+          # Guest cart operations
+          - path: /api/guest-cart
+            pathType: Prefix
+            backend:
+              service:
+                name: cart-service
+                port:
+                  number: 80
+          # Inventory queries (co-located in Cart Service)
+          - path: /api/inventory
+            pathType: Prefix
+            backend:
+              service:
+                name: cart-service
+                port:
+                  number: 80
+          # Checkout with payment + fiscal
+          - path: /api/checkout
+            pathType: Prefix
+            backend:
+              service:
+                name: cart-service
+                port:
+                  number: 80
+---
+# ConfigMap for custom proxy headers
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-headers
+data:
+  X-Correlation-Id: "$request_id"
+---
+# Default backend for returning 404 on unmatched routes
+apiVersion: v1
+kind: Service
+metadata:
+  name: default-backend
+spec:
+  type: ClusterIP
+  selector:
+    app: default-backend
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: default-backend
+  labels:
+    app: default-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: default-backend
+  template:
+    metadata:
+      labels:
+        app: default-backend
+    spec:
+      containers:
+        - name: default-backend
+          image: registry.k8s.io/defaultbackend-amd64:1.5
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cart-config
+  labels:
+    app: cart-service
+data:
+  Redis__ConnectionString: "redis-service:6379"
+  RabbitMQ__Host: "rabbitmq-service"
+  RabbitMQ__Port: "5672"
+  PaymentService__BaseUrl: "http://payment-service"
+  FiscalService__BaseUrl: "https://cis.porezna-uprava.hr:8449"
+  FiscalService__PremisesId: "1"
+  FiscalService__RegisterId: "1"

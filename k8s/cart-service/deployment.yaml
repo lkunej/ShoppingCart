@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cart-service
+  labels:
+    app: cart-service
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: cart-service
+  template:
+    metadata:
+      labels:
+        app: cart-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+        - name: cart-service
+          image: cart-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: Redis__ConnectionString
+              valueFrom:
+                configMapKeyRef:
+                  name: cart-config
+                  key: Redis__ConnectionString
+            - name: RabbitMQ__Host
+              valueFrom:
+                configMapKeyRef:
+                  name: cart-config
+                  key: RabbitMQ__Host
+            - name: RabbitMQ__Port
+              valueFrom:
+                configMapKeyRef:
+                  name: cart-config
+                  key: RabbitMQ__Port
+            - name: PaymentService__BaseUrl
+              valueFrom:
+                configMapKeyRef:
+                  name: cart-config
+                  key: PaymentService__BaseUrl
+            - name: FiscalService__BaseUrl
+              valueFrom:
+                configMapKeyRef:
+                  name: cart-config
+                  key: FiscalService__BaseUrl
+            - name: FiscalService__PremisesId
+              valueFrom:
+                configMapKeyRef:
+                  name: cart-config
+                  key: FiscalService__PremisesId
+            - name: FiscalService__RegisterId
+              valueFrom:
+                configMapKeyRef:
+                  name: cart-config
+                  key: FiscalService__RegisterId
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: cart-secrets
+                  key: ConnectionStrings__DefaultConnection
+            - name: Jwt__PublicKey
+              valueFrom:
+                secretKeyRef:
+                  name: cart-secrets
+                  key: Jwt__PublicKey
+            - name: RabbitMQ__Username
+              valueFrom:
+                secretKeyRef:
+                  name: cart-secrets
+                  key: RabbitMQ__Username
+            - name: RabbitMQ__Password
+              valueFrom:
+                secretKeyRef:
+                  name: cart-secrets
+                  key: RabbitMQ__Password
+            - name: PaymentService__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: cart-secrets
+                  key: PaymentService__ApiKey
+            - name: PaymentService__MerchantId
+              valueFrom:
+                secretKeyRef:
+                  name: cart-secrets
+                  key: PaymentService__MerchantId
+            - name: FiscalService__CertificatePassword
+              valueFrom:
+                secretKeyRef:
+                  name: cart-secrets
+                  key: FiscalService__CertificatePassword
+            - name: FiscalService__BusinessOib
+              valueFrom:
+                secretKeyRef:
+                  name: cart-secrets
+                  key: FiscalService__BusinessOib
+            - name: FiscalService__CertificatePath
+              value: "/etc/fiscal-cert/fiskal.pfx"
+          volumeMounts:
+            - name: fiscal-cert
+              mountPath: /etc/fiscal-cert
+              readOnly: true
+          resources:
+            requests:
+              cpu: 128m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 2
+      volumes:
+        - name: fiscal-cert
+          secret:
+            secretName: fiscal-cert-secret

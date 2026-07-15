@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  labels:
+    app: auth-service
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+        - name: auth-service
+          image: auth-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: Redis__ConnectionString
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: Redis__ConnectionString
+            - name: RabbitMQ__Host
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: RabbitMQ__Host
+            - name: RabbitMQ__Port
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: RabbitMQ__Port
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: ConnectionStrings__DefaultConnection
+            - name: Jwt__PrivateKey
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: Jwt__PrivateKey
+            - name: Jwt__PublicKey
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: Jwt__PublicKey
+            - name: RabbitMQ__Username
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: RabbitMQ__Username
+            - name: RabbitMQ__Password
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: RabbitMQ__Password
+          resources:
+            requests:
+              cpu: 128m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 2
